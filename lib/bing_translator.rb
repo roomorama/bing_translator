@@ -195,7 +195,7 @@ class BingTranslator
         xml.From_ params[:from]
         xml.Options {
           xml.Category({xmlns: data_contract}, "general")
-          xml.ContentType({xmlns: data_contract}, "text/plain")
+          xml.ContentType({xmlns: data_contract})
           xml.ReservedFlags({xmlns: data_contract})
           xml.State({xmlns: data_contract})
           xml.Uri({xmlns: data_contract})
