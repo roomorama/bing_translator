@@ -12,6 +12,7 @@ require 'json'
 
 class BingTranslator
   TRANSLATE_URI = 'http://api.microsofttranslator.com/V2/Http.svc/Translate'
+  TRANSLATE_ARRAY_URI = 'http://api.microsofttranslator.com/V2/Http.svc/TranslateArray'
   DETECT_URI = 'http://api.microsofttranslator.com/V2/Http.svc/Detect'
   LANG_CODE_LIST_URI = 'http://api.microsofttranslator.com/V2/Http.svc/GetLanguagesForTranslate'
   ACCESS_TOKEN_URI = 'https://datamarket.accesscontrol.windows.net/v2/OAuth2-13'
@@ -26,6 +27,7 @@ class BingTranslator
     @skip_ssl_verify = skip_ssl_verify
 
     @translate_uri = URI.parse TRANSLATE_URI
+    @translate_array_uri = URI.parse TRANSLATE_ARRAY_URI
     @detect_uri = URI.parse DETECT_URI
     @list_codes_uri = URI.parse LANG_CODE_LIST_URI
     @access_token_uri = URI.parse ACCESS_TOKEN_URI
@@ -44,6 +46,32 @@ class BingTranslator
     }
     params[:from] = from unless from.empty?
     result = result @translate_uri, params
+
+    Nokogiri.parse(result.body).at_xpath("//xmlns:string").content
+  end
+
+  def translate_array(text_array, params = {})
+    raise "Must provide :to." if params[:to].nil?
+
+    builder = Nokogiri::XML::Builder.new do |xml|
+      xml.TranslateArrayRequest {
+        xml.AppId
+        xml.From_ params[:from]
+        xml.To_ params[:to]
+        xml.Texts {
+          text_array.each do |text|
+            xml.string({xmlns: "http://schemas.microsoft.com/2003/10/Serialization/Arrays"}, text)
+          end
+        }
+      }
+    end
+
+    puts builder.to_xml
+
+    result = post_request @translate_array_uri, builder.to_xml
+
+    puts result
+    puts Nokogiri.parse(result.body)
 
     Nokogiri.parse(result.body).at_xpath("//xmlns:string").content
   end
@@ -82,7 +110,7 @@ class BingTranslator
   end
 
 
-private
+  private
   def prepare_param_string(params)
     params.map { |key, value| "#{key}=#{value}" }.join '&'
   end
@@ -109,6 +137,26 @@ private
     end
   end
 
+  def post_request(uri, params={})
+    get_access_token
+    http = Net::HTTP.new(uri.host, uri.port)
+    if uri.scheme == "https"
+      http.use_ssl = true
+      http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @skip_ssl_verify
+    end
+
+    results = http.post(uri.path, CGI.escape(params), {'Authorization' => "Bearer #{@access_token['access_token']}"})
+
+    if results.response.code.to_i == 200
+      results
+    else
+      puts results
+      puts results.body
+      results
+      #html = Nokogiri::HTML(results.body)
+      #raise Exception, html.xpath("//text()").remove.map(&:to_s).join(' ')
+    end
+  end
   # Private: Get a new access token
   #
   # Microsoft changed up how you get access to the Translate API.
