@@ -1,5 +1,5 @@
-Bing Translator
-===============
+Bing Translator forked from Codeblock/bing_translator-gem
+=========================================================
 
 This gem wraps the Microsoft Bing HTTP Translate API.
 I am in no way affiliated with Microsoft or Bing.
@@ -58,6 +58,7 @@ require 'rubygems'
 require 'bing_translator'
 translator = BingTranslator.new('YOUR_CLIENT_ID', 'YOUR_CLIENT_SECRET')
 spanish = translator.translate 'Hello. This will be translated!', :from => 'en', :to => 'es'
+spanish_array = translator.translate_array ["hello", "bye"], from: en, to: es
 
 # without :from for auto language detection
 spanish = translator.translate 'Hello. This will be translated!', :to => 'es'
