@@ -1,12 +1,7 @@
-Bing Translator forked from Codeblock/bing_translator-gem
-=========================================================
+Bing Translator 
+===============
 
-This gem wraps the Microsoft Bing HTTP Translate API.
-I am in no way affiliated with Microsoft or Bing.
-Use this gem at your own risk.
-
-Released under MIT.
-Tested with MRI 2.0.0, 1.9.3 and 1.8.7.
+This gem is forked from Codeblock/bing_translator-gem, translate_array functionality is added.
 
 Installation
 ============
