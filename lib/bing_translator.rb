@@ -21,17 +21,20 @@ class BingTranslator
   class Exception < StandardError; end
   class AuthenticationException < StandardError; end
 
+  attr_reader :request_type
+
   def initialize(client_id, client_secret, skip_ssl_verify = false)
     @client_id = client_id
     @client_secret = client_secret
     @skip_ssl_verify = skip_ssl_verify
+    @access_token_uri = URI.parse(ACCESS_TOKEN_URI)
 
-    @translate_uri = URI.parse TRANSLATE_URI
-    @translate_array_uri = URI.parse TRANSLATE_ARRAY_URI
-    @detect_uri = URI.parse DETECT_URI
-    @list_codes_uri = URI.parse LANG_CODE_LIST_URI
-    @access_token_uri = URI.parse ACCESS_TOKEN_URI
-    @speak_uri = URI.parse SPEAK_URI
+    @request_type = {
+      translate: {method: :get, uri: URI.parse(TRANSLATE_URI)},
+      translate_array: {method: :post, uri: URI.parse(TRANSLATE_ARRAY_URI)},
+      detect: {method: :get, uri: URI.parse(DETECT_URI)},
+      list_codes: {method: :get, uri: URI.parse(LANG_CODE_LIST_URI)},
+      speak: {method: :get, uri: URI.parse(SPEAK_URI)} }
   end
 
   def translate(text, params = {})
@@ -45,35 +48,17 @@ class BingTranslator
       'contentType' => 'text/plain'
     }
     params[:from] = from unless from.empty?
-    result = result @translate_uri, params
+    result = result(:translate, params)
 
     Nokogiri.parse(result.body).at_xpath("//xmlns:string").content
   end
 
   def translate_array(text_array, params = {})
     raise "Must provide :to." if params[:to].nil?
+    xml_body = translate_array_xml_builder(text_array, params)
+    result = result(:translate_array, xml_body)
 
-    builder = Nokogiri::XML::Builder.new do |xml|
-      xml.TranslateArrayRequest {
-        xml.AppId
-        xml.From_ params[:from]
-        xml.To_ params[:to]
-        xml.Texts {
-          text_array.each do |text|
-            xml.string({xmlns: "http://schemas.microsoft.com/2003/10/Serialization/Arrays"}, text)
-          end
-        }
-      }
-    end
-
-    puts builder.to_xml
-
-    result = post_request @translate_array_uri, builder.to_xml
-
-    puts result
-    puts Nokogiri.parse(result.body)
-
-    Nokogiri.parse(result.body).at_xpath("//xmlns:string").content
+    Nokogiri.parse(result.body).xpath("//namespace:TranslatedText", "namespace" => "http://schemas.datacontract.org/2004/07/Microsoft.MT.Web.Service.V2").children.map { |c| c.content }
   end
 
   def detect(text)
@@ -82,7 +67,7 @@ class BingTranslator
       'category' => 'general',
       'contentType' => 'text/plain'
     }
-    result = result @detect_uri, params
+    result = result(:detect, params)
 
     Nokogiri.parse(result.body).at_xpath("//xmlns:string").content.to_sym
   end
@@ -99,35 +84,36 @@ class BingTranslator
       'language' => params[:language].to_s
     }
 
-    result = result(@speak_uri, params, { "Content-Type" => params[:format].to_s })
+    result = result(:speak, params, { "Content-Type" => params[:format].to_s })
 
     result.body
   end
 
   def supported_language_codes
-    result = result @list_codes_uri
+    result = result(:list_codes)
     Nokogiri.parse(result.body).xpath("//xmlns:string").map(&:content)
   end
 
-
-  private
   def prepare_param_string(params)
     params.map { |key, value| "#{key}=#{value}" }.join '&'
   end
 
-  def result(uri, params={}, headers={})
-    get_access_token
+  def result(request_type, params={}, headers={})
+    uri = @request_type[request_type][:uri]
     http = Net::HTTP.new(uri.host, uri.port)
     if uri.scheme == "https"
       http.use_ssl = true
       http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @skip_ssl_verify
     end
 
-    results = http.get(
-      "#{uri.path}?#{prepare_param_string(params)}",
-      {
-        'Authorization' => "Bearer #{@access_token['access_token']}"
-      })
+    case @request_type[request_type][:method]
+      when :get
+        request = build_get_request(uri, params)
+      when :post
+        request = build_post_request(uri, params)
+    end
+
+    results = http.request(request)
 
     if results.response.code.to_i == 200
       results
@@ -137,24 +123,36 @@ class BingTranslator
     end
   end
 
-  def post_request(uri, params={})
+  def build_get_request(uri, params)
     get_access_token
+    request = Net::HTTP::Get.new("#{uri.path}?#{prepare_param_string(params)}")
+    request.add_field 'Authorization', "Bearer #{@access_token['access_token']}"
+    request
+  end
+
+  def build_post_request(uri, body)
+    get_access_token
+    request = Net::HTTP::Post.new(uri.request_uri)
+    request.content_type = "text/xml"
+    request.add_field 'Authorization', "Bearer #{@access_token['access_token']}"
+    request.body = body
+    request
+  end
+
+  def post_request(uri, xml_body)
     http = Net::HTTP.new(uri.host, uri.port)
     if uri.scheme == "https"
       http.use_ssl = true
       http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @skip_ssl_verify
     end
 
-    results = http.post(uri.path, CGI.escape(params), {'Authorization' => "Bearer #{@access_token['access_token']}"})
+    results = http.request(build_post_request(uri, xml_body))
 
     if results.response.code.to_i == 200
       results
     else
-      puts results
-      puts results.body
-      results
-      #html = Nokogiri::HTML(results.body)
-      #raise Exception, html.xpath("//text()").remove.map(&:to_s).join(' ')
+      html = Nokogiri::HTML(results.body)
+      raise Exception, html.xpath("//text()").remove.map(&:to_s).join(' ')
     end
   end
   # Private: Get a new access token
@@ -186,5 +184,30 @@ class BingTranslator
     raise AuthenticationException, @access_token['error'] if @access_token["error"]
     @access_token['expires_at'] = Time.now + @access_token['expires_in'].to_i
     @access_token
+  end
+
+  def translate_array_xml_builder(text_array, params = {})
+    data_contract = "http://schemas.datacontract.org/2004/07/Microsoft.MT.Web.Service.V2"
+    serialization = "http://schemas.microsoft.com/2003/10/Serialization/Arrays"
+    Nokogiri::XML::Builder.new do |xml|
+      xml.TranslateArrayRequest {
+        xml.AppId
+        xml.From_ params[:from]
+        xml.Options {
+          xml.Category({xmlns: data_contract}, "general")
+          xml.ContentType({xmlns: data_contract}, "text/plain")
+          xml.ReservedFlags({xmlns: data_contract})
+          xml.State({xmlns: data_contract})
+          xml.Uri({xmlns: data_contract})
+          xml.User({xmlns: data_contract})
+        }
+        xml.Texts {
+          text_array.each do |text|
+            xml.string({xmlns: serialization}, text)
+          end
+        }
+        xml.To_ params[:to]
+      }
+    end.to_xml(:save_with => Nokogiri::XML::Node::SaveOptions::AS_XML | Nokogiri::XML::Node::SaveOptions::NO_DECLARATION).strip
   end
 end
