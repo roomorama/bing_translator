@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = 'bing_translator'
-  s.version     = '0.1.0'
+  s.version     = '0.1.1'
   s.date        = '2013-07-20'
   s.homepage    = 'https://www.github.com/shuhong/bing_translator'
   s.summary     = "Translate using the Bing HTTP API"
