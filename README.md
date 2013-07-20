@@ -2,31 +2,7 @@ Bing Translator
 ===============
 
 This gem is forked from Codeblock/bing_translator-gem, translate_array functionality is added.
-
-Installation
-============
-
-To use this rubygem:
-
-    $ sudo gem install bing_translator
-
-With bundler:
-
-    gem "bing_translator", "~> 4.0.0"
-
-Information
-===========
-
-Version 2.0.0+ of bing\_translator uses the new OAuth-based Bing
-authentication.
-
-Documentation on the Microsoft Translator API is [here](http://msdn.microsoft.com/en-us/library/ff512419.aspx)
-
-bing\_translator is also smart about requesting the token, and handles this
-behind the scenes. It will only request a token if it knows the old one
-expired (X seconds from when we requested the last token, where X is given
-to us when we make the request. As of this writing, X is consistently 10
-minutes).
+Nokogiri and JSON version dependencies are relaxed to 1.5.4 and 1.7.7 respectively.
 
 Getting a Client ID and Secret
 ==============================

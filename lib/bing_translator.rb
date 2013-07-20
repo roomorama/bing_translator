@@ -139,22 +139,6 @@ class BingTranslator
     request
   end
 
-  def post_request(uri, xml_body)
-    http = Net::HTTP.new(uri.host, uri.port)
-    if uri.scheme == "https"
-      http.use_ssl = true
-      http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @skip_ssl_verify
-    end
-
-    results = http.request(build_post_request(uri, xml_body))
-
-    if results.response.code.to_i == 200
-      results
-    else
-      html = Nokogiri::HTML(results.body)
-      raise Exception, html.xpath("//text()").remove.map(&:to_s).join(' ')
-    end
-  end
   # Private: Get a new access token
   #
   # Microsoft changed up how you get access to the Translate API.
