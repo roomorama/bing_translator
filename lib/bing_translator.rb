@@ -168,7 +168,7 @@ class BingTranslator
 
     if @access_token["error"]
       error = @access_token["error"]
-      @access_token = 0
+      @access_token = nil
       raise AuthenticationException, error
     end
 
