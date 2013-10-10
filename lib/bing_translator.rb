@@ -171,7 +171,7 @@ class BingTranslator
       @access_token = 0
       raise AuthenticationException, error
     end
-    
+
     @access_token['expires_at'] = Time.now + @access_token['expires_in'].to_i
     @access_token
   end
