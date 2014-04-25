@@ -8,6 +8,6 @@ Gem::Specification.new do |s|
   s.authors     = ["Ricky Elrod", "Shuhong"]
   s.email       = 'shuhong@roomorama.com'
   s.files       = ["lib/bing_translator.rb"]
-  s.add_dependency "nokogiri", "~> 1.5.4"
+  s.add_dependency "nokogiri", "~> 1.5"
   s.add_dependency "json", "~> 1.7"
 end
